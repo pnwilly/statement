@@ -1,0 +1,162 @@
+{% if letter_head and letter_head.content %}
+{{ letter_head.content }}
+
+<br><br>
+{% endif %}
+
+<h2 style="margin-bottom: 8px; text-align: center;">
+    {{ _("STATEMENT OF ACCOUNT") }}
+</h2>
+
+{# Header on one line: Customer left, Date range right #}
+{% set party_name = (filters.party_name and filters.party_name[0]) or "" %}
+{% set party_code = (filters.party and filters.party[0]) or "" %}
+
+<table style="width: 100%; margin: 0 0 4px 0;">
+    <tr>
+        <td style="text-align: left;">
+            {{ _("Customer:") }}
+            {% if party_name and party_code and party_name == party_code %}
+                {{ party_name }}
+            {% elif party_name %}
+                {{ party_name }} ({{ party_code }})
+            {% else %}
+                {{ party_code }}
+            {% endif %}
+        </td>
+        <td style="text-align: right;">
+            {{ _("Date:") }}
+            {{ frappe.format(filters.from_date, "Date") }}
+            {{ _("to") }}
+            {{ frappe.format(filters.to_date, "Date") }}
+        </td>
+    </tr>
+</table>
+
+<br>
+
+<table class="table table-bordered" style="width: 100%; border-collapse: collapse; font-size: 8pt;">
+    <thead>
+        <tr>
+            <th style="width: 12%;">{{ _("Date") }}</th>
+            <th style="width: 30%;">{{ _("Reference") }}</th>
+            <th style="width: 15%; text-align: right;">{{ _("Debit") }}</th>
+            <th style="width: 15%; text-align: right;">{{ _("Credit") }}</th>
+            <th style="width: 18%; text-align: right; nowrap;">{{ _("Balance (Dr/Cr)") }}</th>
+        </tr>
+    </thead>
+
+    <tbody>
+    {% for row in data %}
+
+        {# Detect special rows based on label text #}
+        {% set label_raw = (row.get("account") or row.get("remarks") or "").strip() %}
+        {% set is_first_opening = "Opening" in label_raw and not loop.last %}
+        {% set is_total = label_raw.startswith("Total") and "Opening" not in label_raw and "Closing" not in label_raw %}
+        {# Treat last special row (Closing or second Opening) as Closing Balance #}
+        {% set is_closing = loop.last and ("Closing" in label_raw or "Opening" in label_raw) %}
+
+        {# Skip Total Movement row entirely #}
+        {% if is_total %}
+            {# do not render Total Movement #}
+
+        {# Opening Balance row: label in Reference, only Balance shown #}
+        {% elif is_first_opening %}
+            <tr>
+                <td></td>
+                <td><strong>{{ _("Opening Balance") }}</strong></td>
+                <td style="text-align:right;"></td>
+                <td style="text-align:right;"></td>
+                <td style="text-align:right;">
+                    {{ frappe.utils.fmt_money(row.balance, currency=filters.presentation_currency) }}
+                </td>
+            </tr>
+
+        {# Closing Balance row: label in Reference, only Balance shown #}
+        {% elif is_closing %}
+            <tr>
+                <td></td>
+                <td><strong>{{ _("Closing Balance") }}</strong></td>
+                <td style="text-align:right;"></td>
+                <td style="text-align:right;"></td>
+                <td style="text-align:right;">
+                    {{ frappe.utils.fmt_money(row.balance, currency=filters.presentation_currency) }}
+                </td>
+            </tr>
+
+        {# Normal transaction rows #}
+        {% else %}
+            <tr>
+                <td>
+                    {% if row.posting_date %}
+                        {{ frappe.format(row.posting_date, "Date") }}
+                    {% endif %}
+                </td>
+
+                <td>
+                    {{ row.voucher_type }} {{ row.voucher_no }}
+                    {% if not (filters.party or filters.account) %}
+                        <br>
+                        {{ row.party or row.account }}
+                    {% endif %}
+                </td>
+
+                <td style="text-align:right;">
+                    {{ frappe.utils.fmt_money(row.debit, currency=filters.presentation_currency) }}
+                </td>
+
+                <td style="text-align:right;">
+                    {{ frappe.utils.fmt_money(row.credit, currency=filters.presentation_currency) }}
+                </td>
+
+                <td style="text-align:right;">
+                    {{ frappe.utils.fmt_money(row.balance, currency=filters.presentation_currency) }}
+                </td>
+            </tr>
+        {% endif %}
+
+    {% endfor %}
+    </tbody>
+</table>
+
+{# Ageing Section #}
+{% if ageing %}
+    <br>
+    <h4 style="margin-bottom: 4px;">
+        {{ _("Ageing Report based on ") }} {{ ageing.ageing_based_on }}
+        {{ _("up to ") }} {{ frappe.format(filters.to_date, "Date") }}
+    </h4>
+
+    <table class="table table-bordered" style="width: 100%; border-collapse: collapse; font-size: 9pt;">
+        <thead>
+            <tr>
+                <th>0 - 30 {{ _("Days") }}</th>
+                <th>30 - 60 {{ _("Days") }}</th>
+                <th>60 - 90 {{ _("Days") }}</th>
+                <th>90 - 120 {{ _("Days") }}</th>
+                <th>{{ _("Above 120 Days") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ frappe.utils.fmt_money(ageing.range1, currency=filters.presentation_currency) }}</td>
+                <td>{{ frappe.utils.fmt_money(ageing.range2, currency=filters.presentation_currency) }}</td>
+                <td>{{ frappe.utils.fmt_money(ageing.range3, currency=filters.presentation_currency) }}</td>
+                <td>{{ frappe.utils.fmt_money(ageing.range4, currency=filters.presentation_currency) }}</td>
+                <td>{{ frappe.utils.fmt_money(ageing.range5, currency=filters.presentation_currency) }}</td>
+            </tr>
+        </tbody>
+    </table>
+{% endif %}
+
+{# Terms #}
+{% if terms_and_conditions %}
+    <br>
+    {{ terms_and_conditions }}
+{% endif %}
+
+{# Footer #}
+{% if letter_head and letter_head.footer %}
+    <br><br>
+    {{ letter_head.footer }}
+{% endif %}
